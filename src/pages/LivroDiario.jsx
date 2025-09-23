@@ -1,14 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-
-const contas = [
-  'Caixa',
-  'Banco',
-  'Clientes',
-  'Fornecedores',
-  'Receita',
-  'Despesa',
-];
+import { getLancamentos, addLancamento } from '../services/lancamentos';
+import { getContasContabeis } from '../services/contasContabeis';
+import { format } from 'date-fns';
 
 const Container = styled.div`
   min-height: 70vh;
@@ -103,15 +97,34 @@ const Form = styled.form`
 `;
 
 export default function LivroDiario() {
-  const [lancamentos, setLancamentos] = useState([
-    { data: '2025-09-23', descricao: 'Venda de produto', debito: 'Caixa', credito: 'Receita', valor: 100 },
-    { data: '2025-09-23', descricao: 'Pagamento fornecedor', debito: 'Despesa', credito: 'Caixa', valor: 50 },
-    // ...adicione mais lançamentos para testar a paginação...
-  ]);
+  const [lancamentos, setLancamentos] = useState([]);
+  const [contas, setContas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [novo, setNovo] = useState({ data: '', descricao: '', debito: '', credito: '', valor: '' });
   const [pagina, setPagina] = useState(1);
   const porPagina = 10;
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true);
+        const [lancData, contasData] = await Promise.all([
+          getLancamentos(),
+          getContasContabeis()
+        ]);
+        setLancamentos(lancData);
+        setContas(contasData);
+      } catch (err) {
+        setErro('Erro ao buscar dados');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
   const totalPaginas = Math.ceil(lancamentos.length / porPagina);
   const lancamentosPaginados = lancamentos.slice((pagina - 1) * porPagina, pagina * porPagina);
 
@@ -119,14 +132,34 @@ export default function LivroDiario() {
     setNovo({ ...novo, [e.target.name]: e.target.value });
   }
 
-  function adicionarLancamento(e) {
+  async function adicionarLancamentoHandler(e) {
     e.preventDefault();
-    const novosLancamentos = [...lancamentos, { ...novo, valor: Number(novo.valor) }];
-    setLancamentos(novosLancamentos);
-    setNovo({ data: '', descricao: '', debito: '', credito: '', valor: '' });
-    setShowForm(false);
-    const novaTotalPaginas = Math.ceil(novosLancamentos.length / porPagina);
-    setPagina(novaTotalPaginas); // Vai para última página real
+    try {
+      setLoading(true);
+      // Formatar data para dd-MM-yyyy
+      const dataFormatada = novo.data ? format(new Date(novo.data), 'dd-MM-yyyy') : '';
+      // Buscar conta pelo código (id) para garantir compatibilidade
+      const contaDebito = contas.find(c => (c.nome || c.codigo || c) === novo.debito || c.id === novo.debito || c.codigo === novo.debito);
+      const contaCredito = contas.find(c => (c.nome || c.codigo || c) === novo.credito || c.id === novo.credito || c.codigo === novo.credito);
+      const payload = {
+        descricao: novo.descricao,
+        contaDebitoId: contaDebito?.codigo || contaDebito?.id || novo.debito,
+        contaCreditoId: contaCredito?.codigo || contaCredito?.id || novo.credito,
+        dataLancamento: dataFormatada,
+        valor: Number(novo.valor)
+      };
+      await addLancamento(payload);
+      const dataAtualizada = await getLancamentos();
+      setLancamentos(dataAtualizada);
+      setNovo({ data: '', descricao: '', debito: '', credito: '', valor: '' });
+      setShowForm(false);
+      const novaTotalPaginas = Math.ceil((dataAtualizada.length) / porPagina);
+      setPagina(novaTotalPaginas);
+    } catch (err) {
+      setErro('Erro ao adicionar lançamento');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function mudarPagina(nova) {
@@ -142,62 +175,73 @@ export default function LivroDiario() {
           <h3 style={{ margin: 0, color: '#2563eb' }}>Lançamentos</h3>
           <AddButton onClick={() => setShowForm(!showForm)} title="Novo lançamento">+</AddButton>
         </div>
-        <Table>
-          <thead>
-            <tr>
-              <Th>Data</Th>
-              <Th>Descrição</Th>
-              <Th>Débito</Th>
-              <Th>Crédito</Th>
-              <Th>Valor</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {lancamentosPaginados.map((l, i) => (
-              <tr key={i + (pagina - 1) * porPagina}>
-                <Td align="center">{l.data}</Td>
-                <Td>{l.descricao}</Td>
-                <Td align="center">{l.debito}</Td>
-                <Td align="center">{l.credito}</Td>
-                <Td align="right">{l.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-        {/* Paginação */}
-        {totalPaginas > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
-            {Array.from({ length: totalPaginas }, (_, i) => (
-              <button
-                key={i + 1}
-                onClick={() => mudarPagina(i + 1)}
-                style={{
-                  background: pagina === i + 1 ? '#2563eb' : '#fff',
-                  color: pagina === i + 1 ? '#fff' : '#2563eb',
-                  border: '1px solid #2563eb',
-                  borderRadius: 6,
-                  padding: '4px 12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-              >
-                {i + 1}
-              </button>
-            ))}
-          </div>
+        {erro && <div style={{ color: 'red', marginBottom: 8 }}>{erro}</div>}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>Carregando...</div>
+        ) : (
+          <>
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Data</Th>
+                  <Th>Descrição</Th>
+                  <Th>Débito</Th>
+                  <Th>Crédito</Th>
+                  <Th>Valor</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {lancamentosPaginados.map((l, i) => (
+                  <tr key={l.id || i + (pagina - 1) * porPagina}>
+                    <Td align="center">{l.dataLancamento || l.data || ''}</Td>
+                    <Td>{l.descricao}</Td>
+                    <Td align="center">{l.contaDebito || l.debito || ''}</Td>
+                    <Td align="center">{l.contaCredito || l.credito || ''}</Td>
+                    <Td align="right">{Number(l.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+            {/* Paginação */}
+            {totalPaginas > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
+                {Array.from({ length: totalPaginas }, (_, i) => (
+                  <button
+                    key={i + 1}
+                    onClick={() => mudarPagina(i + 1)}
+                    style={{
+                      background: pagina === i + 1 ? '#2563eb' : '#fff',
+                      color: pagina === i + 1 ? '#fff' : '#2563eb',
+                      border: '1px solid #2563eb',
+                      borderRadius: 6,
+                      padding: '4px 12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
         {showForm && (
-          <Form onSubmit={adicionarLancamento}>
+          <Form onSubmit={adicionarLancamentoHandler}>
             <Input type="date" name="data" value={novo.data} onChange={handleChange} required />
             <Input type="text" name="descricao" value={novo.descricao} onChange={handleChange} placeholder="Descrição" required minLength={2} />
             <Select name="debito" value={novo.debito} onChange={handleChange} required>
               <option value="">Débito</option>
-              {contas.map((c) => <option key={c} value={c}>{c}</option>)}
+              {contas.map((c) => (
+                <option key={c.id || c.codigo || c.nome || c} value={c.nome || c.codigo || c}>{c.nome || c.codigo || c}</option>
+              ))}
             </Select>
             <Select name="credito" value={novo.credito} onChange={handleChange} required>
               <option value="">Crédito</option>
-              {contas.map((c) => <option key={c} value={c}>{c}</option>)}
+              {contas.map((c) => (
+                <option key={c.id || c.codigo || c.nome || c} value={c.nome || c.codigo || c}>{c.nome || c.codigo || c}</option>
+              ))}
             </Select>
             <Input type="number" name="valor" value={novo.valor} onChange={handleChange} placeholder="Valor" required min="0" step="0.01" style={{ width: 90 }} />
             <SaveButton type="submit">Salvar</SaveButton>

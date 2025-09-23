@@ -80,12 +80,16 @@ const Input = styled.input`
   padding: 6px;
   border-radius: 6px;
   border: 1px solid #ccc;
+  background: #fff;
+  color: #2563eb;
 `;
 
 const Select = styled.select`
   padding: 6px;
   border-radius: 6px;
   border: 1px solid #ccc;
+  background: #fff;
+  color: #2563eb;
 `;
 
 const Form = styled.form`

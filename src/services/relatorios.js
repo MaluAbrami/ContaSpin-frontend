@@ -1,7 +1,7 @@
 import api from './api';
 
-export const getBalancete = async (params) => {
-  const { data } = await api.get('/relatorios/gerar-balancete', { params });
+export const getBalancete = async (dataReferencia) => {
+  const { data } = await api.get(`/relatorios/gerar-balancete/${dataReferencia}`);
   return data;
 };
 

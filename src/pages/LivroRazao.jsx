@@ -128,17 +128,29 @@ export default function LivroRazao() {
               <tbody>
                 {(() => {
                   let saldo = 0;
-                  // Calcula saldo inicial (opcional: pode vir do backend futuramente)
+                  // Descobre o tipo da conta selecionada
+                  const tipoConta = contas.find(c => c.codigo === contaSelecionada)?.tipo || 'ATIVO';
+                  // Função de regra contábil para saldo
+                  function calculaSaldo(tipo, saldoAtual, lancamento) {
+                    const valor = Number(lancamento.valor);
+                    if (tipo === 'ATIVO' || tipo === 'DESPESA') {
+                      if (lancamento.tipoLancamento === 'DEBITO') return saldoAtual + valor;
+                      if (lancamento.tipoLancamento === 'CREDITO') return saldoAtual - valor;
+                    } else if (tipo === 'PASSIVO' || tipo === 'PATRIMONIO_LIQUIDO' || tipo === 'RECEITA') {
+                      if (lancamento.tipoLancamento === 'CREDITO') return saldoAtual + valor;
+                      if (lancamento.tipoLancamento === 'DEBITO') return saldoAtual - valor;
+                    }
+                    return saldoAtual;
+                  }
                   return lancamentosPaginados.map((l, i) => {
                     let debito = '';
                     let credito = '';
                     if (l.tipoLancamento === 'DEBITO') {
                       debito = Number(l.valor);
-                      saldo += debito;
                     } else if (l.tipoLancamento === 'CREDITO') {
                       credito = Number(l.valor);
-                      saldo -= credito;
                     }
+                    saldo = calculaSaldo(tipoConta, saldo, l);
                     return (
                       <tr key={i}>
                         <Td align="center">{l.data}</Td>
@@ -152,16 +164,26 @@ export default function LivroRazao() {
                 })()}
               </tbody>
               {/* Rodapé com totais */}
-              {saldoFinal && (
-                <tfoot>
-                  <tr style={{ background: '#f3f6fa', fontWeight: 700 }}>
-                    <Td colSpan={2} align="right">Totais:</Td>
-                    <Td align="right">{Number(saldoFinal.debitoTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
-                    <Td align="right">{Number(saldoFinal.creditoTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
-                    <Td align="right">{(Number(saldoFinal.debitoFinal) - Number(saldoFinal.creditoFinal)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
-                  </tr>
-                </tfoot>
-              )}
+              {saldoFinal && (() => {
+                // Regra contábil para saldo final
+                const tipoConta = contas.find(c => c.codigo === contaSelecionada)?.tipo || 'ATIVO';
+                let saldoFinalValor = 0;
+                if (tipoConta === 'ATIVO' || tipoConta === 'DESPESA') {
+                  saldoFinalValor = Number(saldoFinal.debitoFinal) - Number(saldoFinal.creditoFinal);
+                } else if (tipoConta === 'PASSIVO' || tipoConta === 'PATRIMONIO_LIQUIDO' || tipoConta === 'RECEITA') {
+                  saldoFinalValor = Number(saldoFinal.creditoFinal) - Number(saldoFinal.debitoFinal);
+                }
+                return (
+                  <tfoot>
+                    <tr style={{ background: '#f3f6fa', fontWeight: 700 }}>
+                      <Td colSpan={2} align="right">Totais:</Td>
+                      <Td align="right">{Number(saldoFinal.debitoTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
+                      <Td align="right">{Number(saldoFinal.creditoTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
+                      <Td align="right">{saldoFinalValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
+                    </tr>
+                  </tfoot>
+                );
+              })()}
             </Table>
             {/* Paginação */}
             {totalPaginas > 1 && (

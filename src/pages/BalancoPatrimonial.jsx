@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import html2pdf from 'html2pdf.js';
 import styled from 'styled-components';
 import { getBalancoPatrimonial } from '../services/relatorios';
 
@@ -62,10 +63,27 @@ function renderTree(node, nivel = 0) {
   );
 }
 
+function usePdfExportStyle() {
+  useEffect(() => {
+    if (!document.head.querySelector('style#pdf-export-style')) {
+      const style = document.createElement('style');
+      style.id = 'pdf-export-style';
+      style.textContent = `
+        .pdf-export { font-size: 12px !important; max-width: 900px !important; }
+        .pdf-export table { font-size: 12px !important; max-width: 900px !important; }
+        .pdf-export th, .pdf-export td { padding: 4px 6px !important; }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+}
+
 export default function BalancoPatrimonial() {
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(null);
+  const pdfRef = useRef();
+  usePdfExportStyle();
 
   useEffect(() => {
     async function fetchData() {
@@ -83,11 +101,27 @@ export default function BalancoPatrimonial() {
     fetchData();
   }, []);
 
+  function exportarPDF() {
+    if (!pdfRef.current) return;
+    // Aplica classe temporária para exportação
+    const el = pdfRef.current;
+    el.classList.add('pdf-export');
+    html2pdf().set({
+      margin: 0.2,
+      filename: `balanco-patrimonial.pdf`,
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+    }).from(el).save().then(() => {
+      el.classList.remove('pdf-export');
+    });
+  }
+
   return (
     <Container>
       <h2 style={{ fontSize: 32, fontWeight: 800, color: '#2563eb' }}>Balanço Patrimonial</h2>
       <p style={{ maxWidth: 500, margin: '1rem auto', fontSize: 20, color: '#2563eb' }}>Veja o balanço patrimonial da empresa.</p>
-      <Card>
+      <button onClick={exportarPDF} style={{ alignSelf: 'flex-end', marginBottom: 8, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 18px', fontWeight: 600, cursor: 'pointer' }}>Exportar PDF</button>
+      <Card ref={pdfRef} id="balanco-pdf" style={{ minWidth: 900, maxWidth: '100%', overflowX: 'auto' }}>
         {erro && <div style={{ color: 'red', marginBottom: 8 }}>{erro}</div>}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 24 }}>Carregando...</div>

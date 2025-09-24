@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import html2pdf from 'html2pdf.js';
 import styled from 'styled-components';
 import { getBalancete } from '../services/relatorios';
 import { format } from 'date-fns';
@@ -38,6 +39,21 @@ const Td = styled.td`
   color: #2563eb;
 `;
 
+function usePdfExportStyleBalancete() {
+  useEffect(() => {
+    if (!document.head.querySelector('style#pdf-export-style-balancete')) {
+      const style = document.createElement('style');
+      style.id = 'pdf-export-style-balancete';
+      style.textContent = `
+        .pdf-export-balancete { font-size: 12px !important; min-width: 900px !important; max-width: 1000px !important; }
+        .pdf-export-balancete table { font-size: 12px !important; min-width: 900px !important; max-width: 1000px !important; }
+        .pdf-export-balancete th, .pdf-export-balancete td { padding: 4px 6px !important; }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+}
+
 export default function Balancete() {
   const [linhas, setLinhas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +62,8 @@ export default function Balancete() {
   const porPagina = 10;
   const totalPaginas = Math.ceil(linhas.length / porPagina);
   const linhasPaginadas = linhas.slice((pagina - 1) * porPagina, pagina * porPagina);
+  const pdfRef = useRef();
+  usePdfExportStyleBalancete();
 
   useEffect(() => {
     async function fetchBalancete() {
@@ -72,11 +90,26 @@ export default function Balancete() {
   const totalDebito = linhas.reduce((acc, l) => acc + Number(l.debito || 0), 0);
   const totalCredito = linhas.reduce((acc, l) => acc + Number(l.credito || 0), 0);
 
+  function exportarPDF() {
+    if (!pdfRef.current) return;
+    const el = pdfRef.current;
+    el.classList.add('pdf-export-balancete');
+    html2pdf().set({
+      margin: 0.2,
+      filename: `balancete.pdf`,
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+    }).from(el).save().then(() => {
+      el.classList.remove('pdf-export-balancete');
+    });
+  }
+
   return (
     <Container>
       <h2 style={{ fontSize: 32, fontWeight: 800, color: '#2563eb' }}>Balancete</h2>
       <p style={{ maxWidth: 500, margin: '1rem auto', fontSize: 20, color: '#2563eb' }}>Veja o balancete da empresa na data de hoje.</p>
-      <Card>
+      <button onClick={exportarPDF} style={{ alignSelf: 'flex-end', marginBottom: 8, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 18px', fontWeight: 600, cursor: 'pointer' }}>Exportar PDF</button>
+  <Card ref={pdfRef} id="balancete-pdf" style={{ minWidth: 900, maxWidth: '100%', overflowX: 'auto' }}>
         {erro && <div style={{ color: 'red', marginBottom: 8 }}>{erro}</div>}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 24 }}>Carregando...</div>

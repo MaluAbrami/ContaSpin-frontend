@@ -159,7 +159,7 @@ export default function LivroDiario() {
       setNovaConta({ codigo: '', nome: '', tipo: '', subTipo: '', subTipo2: '' });
       setShowContaForm(false);
     } catch (err) {
-      setErro('Erro ao adicionar conta');
+      setErro(err?.message || 'Erro ao adicionar conta');
     } finally {
       setLoading(false);
     }
@@ -176,7 +176,7 @@ export default function LivroDiario() {
         setLancamentos(lancData);
         setContas(contasData);
       } catch (err) {
-        setErro('Erro ao buscar dados');
+        setErro(err?.message || 'Erro ao buscar dados');
       } finally {
         setLoading(false);
       }
@@ -215,7 +215,7 @@ export default function LivroDiario() {
       const novaTotalPaginas = Math.ceil((dataAtualizada.length) / porPagina);
       setPagina(novaTotalPaginas);
     } catch (err) {
-      setErro('Erro ao adicionar lançamento');
+      setErro(err?.message || 'Erro ao adicionar lançamento');
     } finally {
       setLoading(false);
     }

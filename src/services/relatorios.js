@@ -10,7 +10,7 @@ export const getBalancoPatrimonial = async (params) => {
   return data;
 };
 
-export const getLivroRazao = async (params) => {
-  const { data } = await api.get('/relatorios/gerar-livro-razao', { params });
+export const getLivroRazao = async (codigoConta) => {
+  const { data } = await api.get(`/relatorios/gerar-livro-razao/${codigoConta}`);
   return data;
 };

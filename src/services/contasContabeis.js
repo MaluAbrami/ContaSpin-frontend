@@ -1,7 +1,7 @@
 import api from './api';
 
-export const getContasContabeis = async () => {
-  const { data } = await api.get('/contas');
+export const getContasContabeis = async (empresaId) => {
+  const { data } = await api.get('/contas/empresa/' + empresaId);
   return data;
 };
 

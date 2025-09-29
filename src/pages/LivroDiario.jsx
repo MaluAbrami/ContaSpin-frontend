@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { getLancamentos, addLancamento } from '../services/lancamentos';
 import { getContasContabeis, addContaContabil } from '../services/contasContabeis';
 import { format } from 'date-fns';
+import { useUser } from '../contexts/UserContext.jsx';
 
 const Container = styled.div`
   min-height: 70vh;
@@ -104,6 +105,9 @@ const Form = styled.form`
 `;
 
 export default function LivroDiario() {
+
+  const { userId } = useUser();
+
   const [lancamentos, setLancamentos] = useState([]);
   const [contas, setContas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -151,10 +155,11 @@ export default function LivroDiario() {
         nome: novaConta.nome,
         tipo: novaConta.tipo,
         subTipo: novaConta.subTipo || null,
-        subTipo2: novaConta.subTipo2 || null
+        subTipo2: novaConta.subTipo2 || null,
+        empresaId: userId
       };
       await addContaContabil(payload);
-      const contasAtualizadas = await getContasContabeis();
+      const contasAtualizadas = await getContasContabeis(userId);
       setContas(contasAtualizadas);
       setNovaConta({ codigo: '', nome: '', tipo: '', subTipo: '', subTipo2: '' });
       setShowContaForm(false);
@@ -170,8 +175,8 @@ export default function LivroDiario() {
       try {
         setLoading(true);
         const [lancData, contasData] = await Promise.all([
-          getLancamentos(),
-          getContasContabeis()
+          getLancamentos(userId),
+          getContasContabeis(userId)
         ]);
         setLancamentos(lancData);
         setContas(contasData);
@@ -182,7 +187,7 @@ export default function LivroDiario() {
       }
     }
     fetchData();
-  }, []);
+  }, [userId]);
 
   const totalPaginas = Math.ceil(lancamentos.length / porPagina);
   const lancamentosPaginados = lancamentos.slice((pagina - 1) * porPagina, pagina * porPagina);
@@ -205,10 +210,11 @@ export default function LivroDiario() {
         contaDebitoId: contaDebito?.codigo || contaDebito?.id || novo.debito,
         contaCreditoId: contaCredito?.codigo || contaCredito?.id || novo.credito,
         dataLancamento: dataFormatada,
-        valor: Number(novo.valor)
+        valor: Number(novo.valor),
+        empresaId: userId
       };
       await addLancamento(payload);
-      const dataAtualizada = await getLancamentos();
+      const dataAtualizada = await getLancamentos(userId);
       setLancamentos(dataAtualizada);
       setNovo({ data: '', descricao: '', debito: '', credito: '', valor: '' });
       setShowForm(false);

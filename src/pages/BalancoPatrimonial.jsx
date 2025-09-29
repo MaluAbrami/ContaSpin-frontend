@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import html2pdf from 'html2pdf.js';
 import styled from 'styled-components';
 import { getBalancoPatrimonial } from '../services/relatorios';
+import { useUser } from '../contexts/UserContext';
 
 const Container = styled.div`
   min-height: 70vh;
@@ -79,6 +80,7 @@ function usePdfExportStyle() {
 }
 
 export default function BalancoPatrimonial() {
+  const { userId } = useUser();
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(null);
@@ -90,7 +92,7 @@ export default function BalancoPatrimonial() {
       try {
         setLoading(true);
         setErro(null);
-        const data = await getBalancoPatrimonial();
+        const data = await getBalancoPatrimonial(userId);
         setDados(data);
       } catch (err) {
         setErro(err?.message || 'Erro ao buscar balanço patrimonial');
@@ -99,7 +101,7 @@ export default function BalancoPatrimonial() {
       }
     }
     fetchData();
-  }, []);
+  }, [userId]);
 
   function exportarPDF() {
     if (!pdfRef.current) return;

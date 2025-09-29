@@ -1,5 +1,6 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useUser } from '../contexts/UserContext.jsx';
 
 const navContainer = {
   position: 'fixed',
@@ -11,10 +12,21 @@ const navContainer = {
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  justifyContent: 'center',
-  gap: '2rem',
+  justifyContent: 'space-between', // Mantém o space-between
   boxShadow: '2px 0 8px rgba(0,0,0,0.07)',
-  zIndex: 10
+  zIndex: 10,
+  paddingTop: 40,
+  paddingBottom: 40,
+  boxSizing: 'border-box', // <-- ADICIONADO: ESSA É A CHAVE!
+};
+
+const navLinksContainer = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '1.5rem',
+  width: '100%',
+  // 'flex: 1' continua removido
 };
 
 const linkStyle = {
@@ -37,14 +49,48 @@ const activeStyle = {
   color: '#fff'
 };
 
+const logoutButtonStyle = {
+  ...linkStyle,
+  background: '#ff4d4d',
+  color: '#fff',
+  cursor: 'pointer',
+  // 'marginTop: auto' continua removido
+};
+
 export default function Navbar() {
+  const { setUserId } = useUser();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    setUserId(null);
+    navigate('/home');
+  };
+
   return (
     <nav style={navContainer}>
-      <NavLink to="/" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle} end>Início</NavLink>
-      <NavLink to="/diario" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>Livro Diário</NavLink>
-      <NavLink to="/razao" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>Livro Razão</NavLink>
-      <NavLink to="/balancete" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>Balancete</NavLink>
-      <NavLink to="/balanco" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>Balanço Patrimonial</NavLink>
+      {/* Container dos links fica no topo */}
+      <div style={navLinksContainer}>
+        <NavLink to="/" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle} end>
+          Início
+        </NavLink>
+        <NavLink to="/diario" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>
+          Livro Diário
+        </NavLink>
+        <NavLink to="/razao" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>
+          Livro Razão
+        </NavLink>
+        <NavLink to="/balancete" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>
+          Balancete
+        </NavLink>
+        <NavLink to="/balanco" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>
+          Balanço Patrimonial
+        </NavLink>
+      </div>
+
+      {/* Botão de Logout no fim */}
+      <button onClick={handleLogout} style={logoutButtonStyle}>
+        Logout
+      </button>
     </nav>
   );
 }

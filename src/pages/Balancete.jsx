@@ -3,6 +3,7 @@ import html2pdf from 'html2pdf.js';
 import styled from 'styled-components';
 import { getBalancete } from '../services/relatorios';
 import { format } from 'date-fns';
+import { useUser } from '../contexts/UserContext.jsx';
 
 const Container = styled.div`
   min-height: 70vh;
@@ -55,6 +56,7 @@ function usePdfExportStyleBalancete() {
 }
 
 export default function Balancete() {
+  const { userId } = useUser(); 
   const [linhas, setLinhas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(null);
@@ -71,7 +73,7 @@ export default function Balancete() {
         setLoading(true);
         setErro(null);
         const hoje = format(new Date(), 'dd-MM-yyyy');
-        const data = await getBalancete(hoje);
+        const data = await getBalancete(hoje, userId);
         setLinhas(data);
       } catch (err) {
         setErro(err?.message || 'Erro ao buscar balancete');

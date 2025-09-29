@@ -1,7 +1,7 @@
 import api from './api';
 
-export const getLancamentos = async () => {
-  const { data } = await api.get('/lancamentos');
+export const getLancamentos = async (empresaId) => {
+  const { data } = await api.get('/lancamentos/empresa/' + empresaId);
   return data;
 };
 

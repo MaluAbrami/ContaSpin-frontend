@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { getContasContabeis } from '../services/contasContabeis';
 import { getLivroRazao } from '../services/relatorios';
+import { useUser } from '../contexts/UserContext.jsx';
 
 const Container = styled.div`
   min-height: 70vh;
@@ -46,6 +47,9 @@ const Select = styled.select`
 `;
 
 export default function LivroRazao() {
+
+  const { userId } = useUser();
+
   const [contas, setContas] = useState([]);
   const [contaSelecionada, setContaSelecionada] = useState('');
   const [dadosRazao, setDadosRazao] = useState(null);
@@ -60,21 +64,21 @@ export default function LivroRazao() {
   useEffect(() => {
     async function fetchContas() {
       try {
-        const data = await getContasContabeis();
+        const data = await getContasContabeis(userId);
         setContas(data);
       } catch (err) {
         setErro(err?.message || 'Erro ao buscar contas');
       }
     }
     fetchContas();
-  }, []);
+  }, [userId]);
 
   async function buscarRazao(codigoConta) {
     setErro(null);
     setDadosRazao(null);
     setPagina(1);
     try {
-      const data = await getLivroRazao(codigoConta);
+      const data = await getLivroRazao(codigoConta, userId);
       setDadosRazao(data);
     } catch (err) {
       setErro(err?.message || 'Erro ao buscar razão');

@@ -58,10 +58,14 @@ const logoutButtonStyle = {
 };
 
 export default function Navbar() {
-  const { setUserId } = useUser();
+  const { userId, setUserId } = useUser();
   const navigate = useNavigate();
 
+  // Não renderiza a barra lateral se não houver usuário logado
+  if (!userId) return null;
+
   const handleLogout = () => {
+    try { localStorage.removeItem('userCompanyName'); } catch (e) {}
     setUserId(null);
     navigate('/home');
   };

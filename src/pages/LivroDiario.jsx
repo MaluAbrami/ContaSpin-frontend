@@ -201,7 +201,12 @@ export default function LivroDiario() {
     try {
       setLoading(true);
       // Formatar data para dd-MM-yyyy
-      const dataFormatada = novo.data ? format(new Date(novo.data), 'dd-MM-yyyy') : '';
+      const dataFormatada = novo.data
+  ? novo.data.split('-').reverse().join('-') // "2001-10-29" → "29-10-2001"
+  : '';
+
+
+      console.log(dataFormatada)
       // Buscar conta pelo código (id) para garantir compatibilidade
       const contaDebito = contas.find(c => (c.nome || c.codigo || c) === novo.debito || c.id === novo.debito || c.codigo === novo.debito);
       const contaCredito = contas.find(c => (c.nome || c.codigo || c) === novo.credito || c.id === novo.credito || c.codigo === novo.credito);

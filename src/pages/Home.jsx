@@ -33,8 +33,8 @@ export default function Home() {
     setError('');
 
     try {
-      const storedName = (() => { try { return localStorage.getItem('userCompanyName'); } catch (e) { return null; } })();
-      if (storedName && selected && storedName !== selected.nome) {
+      const storedEmail = (() => { try { return localStorage.getItem('userCompanyEmail'); } catch (e) { return null; } })();
+      if (storedEmail && selected && storedEmail !== selected.email) {
         // pede confirmação para trocar de empresa
         setShowConfirmSwitch(true);
         return;
@@ -50,13 +50,13 @@ export default function Home() {
   const performLogin = async () => {
     try {
       // se existir empresa anterior, remove antes de logar
-      try { localStorage.removeItem('userCompanyName'); } catch (e) {}
+      try { localStorage.removeItem('userCompanyEmail'); } catch (e) {}
       setUserId(null);
 
       const data = await loginEmpresa(selected.email, senha);
       const id = typeof data === 'string' ? data : (data?.id || data?._id || null);
       setUserId(id || data);
-      try { localStorage.setItem('userCompanyName', selected.nome); } catch (e) {}
+      try { localStorage.setItem('userCompanyEmail', selected.email); } catch (e) {}
       navigate('/', { state: { toast: { message: `Entrou na empresa ${selected.nome}` } } });
     } catch (err) {
       setError(err.message || 'Senha incorreta');
@@ -194,10 +194,10 @@ export default function Home() {
           {empresas
             .filter((empresa) => {
               // filtra a empresa logada pelo nome (nome é único)
-              let storedName = null;
-              try { storedName = localStorage.getItem('userCompanyName'); } catch (e) { storedName = null; }
-              if (!storedName) return true;
-              return empresa.nome !== storedName;
+              let storedEmail = null;
+              try { storedEmail = localStorage.getItem('userCompanyEmail'); } catch (e) { storedEmail = null; }
+              if (!storedEmail) return true;
+              return empresa.email !== storedEmail;
             })
             .map((empresa) => (
               <div

@@ -65,7 +65,7 @@ export default function Navbar() {
   if (!userId) return null;
 
   const handleLogout = () => {
-    try { localStorage.removeItem('userCompanyName'); } catch (e) {}
+    try { localStorage.removeItem('userCompanyEmail'); } catch (e) {}
     setUserId(null);
     navigate('/home');
   };

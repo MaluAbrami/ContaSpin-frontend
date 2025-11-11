@@ -47,7 +47,7 @@ const Row = styled.div`
   gap: 32px;
 `;
 
-function renderTree(node, nivel = 0) {
+function renderTree(node, nivel = 0, showValorNaData = false) {
   if (!node) return null;
   return (
     <>
@@ -56,12 +56,44 @@ function renderTree(node, nivel = 0) {
           {node.codigo ? `${node.codigo} - ` : ''}{node.nome}
         </Td>
         <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>
-          {Number(node.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          {moeda(node.valorAtual ?? node.valor ?? 0)}
+        </Td>
+        <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>
+          {showValorNaData ? moeda(node.valorNaData ?? node.valor ?? 0) : '-'}
         </Td>
       </tr>
-      {node.filhos && node.filhos.map((f, i) => renderTree(f, nivel + 1))}
+      {node.filhos && node.filhos.map((f, i) => <React.Fragment key={(f.codigo ?? f.nome) + i}>{renderTree(f, nivel + 1, showValorNaData)}</React.Fragment>)}
     </>
   );
+}
+
+// cria índice por código/nome na árvore B e mescla valores com a árvore A
+function mergeTrees(rootA, rootB) {
+  if (!rootA) return null;
+
+  const keyOf = (n) => (n?.codigo ?? n?.nome ?? '').toString();
+
+  const indexB = new Map();
+  function indexNodeB(n) {
+    if (!n) return;
+    indexB.set(keyOf(n), n);
+    n.filhos?.forEach(indexNodeB);
+  }
+  if (rootB) indexNodeB(rootB);
+
+  function build(a) {
+    const match = indexB.get(keyOf(a));
+    const filhos = a.filhos?.map(build) ?? [];
+    const valorAtual = Number(a.valor ?? a.total ?? 0);
+    const valorNaData = Number(match?.valor ?? match?.total ?? 0);
+    return { ...a, filhos, valorAtual, valorNaData };
+  }
+  return build(rootA);
+}
+
+function moeda(v) {
+  if (v === null || v === undefined) return '-';
+  return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 function usePdfExportStyle() {
@@ -81,100 +113,150 @@ function usePdfExportStyle() {
 
 export default function BalancoPatrimonial() {
   const { userId } = useUser();
-  const [dados, setDados] = useState(null);
+  const [dados, setDados] = useState(null); // balanço "atual"
+  const [dadosNaData, setDadosNaData] = useState(null); // balanço na data selecionada
+  const [dataEscolhida, setDataEscolhida] = useState('');
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(null);
   const pdfRef = useRef();
   usePdfExportStyle();
 
   useEffect(() => {
-    async function fetchData() {
+    let alive = true;
+    async function fetchAtual() {
       try {
         setLoading(true);
         setErro(null);
-        const data = await getBalancoPatrimonial(userId);
-        setDados(data);
-      } catch (err) {
-        setErro(err?.message || 'Erro ao buscar balanço patrimonial');
+        const resp = await getBalancoPatrimonial(userId);
+        if (!alive) return;
+        setDados(resp);
+      } catch (e) {
+        if (!alive) return;
+        setErro(e?.message || 'Erro ao buscar balanço');
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     }
-    fetchData();
+    if (userId) fetchAtual();
+    return () => { alive = false; };
   }, [userId]);
+
+  useEffect(() => {
+    let alive = true;
+    async function fetchNaData() {
+      if (!dataEscolhida) {
+        setDadosNaData(null);
+        return;
+      }
+      try {
+        setLoading(true);
+        setErro(null);
+        const resp = await getBalancoPatrimonial(userId, { data: dataEscolhida });
+        if (!alive) return;
+        setDadosNaData(resp);
+      } catch (e) {
+        if (!alive) return;
+        setErro(e?.message || 'Erro ao buscar balanço na data');
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+    if (userId) fetchNaData();
+    return () => { alive = false; };
+  }, [userId, dataEscolhida]);
+
+  const ativo = mergeTrees(dados?.ativo, dadosNaData?.ativo);
+  const passivoPL = mergeTrees(dados?.passivoPL ?? dados?.passivo, dadosNaData?.passivoPL ?? dadosNaData?.passivo);
+  const patrimonioLiquido = mergeTrees(dados?.patrimonioLiquido, dadosNaData?.patrimonioLiquido);
+
+  const showValorNaData = Boolean(dataEscolhida);
 
   function exportarPDF() {
     if (!pdfRef.current) return;
-    // Aplica classe temporária para exportação
-    const el = pdfRef.current;
-    el.classList.add('pdf-export');
     html2pdf().set({
       margin: 0.2,
-      filename: `balanco-patrimonial.pdf`,
+      filename: `balanco-patrimonial${dataEscolhida ? `-${dataEscolhida}` : ''}.pdf`,
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
-    }).from(el).save().then(() => {
-      el.classList.remove('pdf-export');
-    });
+    }).from(pdfRef.current).save();
   }
 
+  const totalAtivoAtual = ativo?.valorAtual ?? 0;
+  const totalAtivoNaData = ativo?.valorNaData ?? 0;
+  const totalPassivoPLAtual = (passivoPL?.valorAtual ?? 0) + (patrimonioLiquido?.valorAtual ?? 0);
+  const totalPassivoPLNaData = (passivoPL?.valorNaData ?? 0) + (patrimonioLiquido?.valorNaData ?? 0);
+
   return (
-    <Container>
-      <h2 style={{ fontSize: 32, fontWeight: 800, color: '#2563eb' }}>Balanço Patrimonial</h2>
-      <p style={{ maxWidth: 500, margin: '1rem auto', fontSize: 20, color: '#2563eb' }}>Veja o balanço patrimonial da empresa.</p>
-      <button onClick={exportarPDF} style={{ alignSelf: 'flex-end', marginBottom: 8, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 18px', fontWeight: 600, cursor: 'pointer' }}>Exportar PDF</button>
-      <Card ref={pdfRef} id="balanco-pdf" style={{ minWidth: 900, maxWidth: '100%', overflowX: 'auto' }}>
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <label htmlFor="data" style={{ fontWeight: 600, color: '#2563eb' }}>Data de referência:</label>
+        <input
+          id="data"
+          type="date"
+          value={dataEscolhida}
+          onChange={(e) => setDataEscolhida(e.target.value)}
+          style={{ padding: 8, borderRadius: 6, border: '1px solid #ccc' }}
+        />
+        <button onClick={exportarPDF} style={{ marginLeft: 'auto', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 18px', fontWeight: 600, cursor: 'pointer' }}>
+          Exportar PDF
+        </button>
+      </div>
+
+      <div ref={pdfRef} style={{ marginTop: 16 }} className="pdf-export">
         {erro && <div style={{ color: 'red', marginBottom: 8 }}>{erro}</div>}
-        {loading ? (
+        {loading && !dados ? (
           <div style={{ textAlign: 'center', padding: 24 }}>Carregando...</div>
-        ) : dados && (
+        ) : (
           <Row>
-            {/* ATIVO */}
             <Col>
               <h3 style={{ color: '#2563eb', textAlign: 'center', fontWeight: 700 }}>ATIVO</h3>
               <Table>
                 <thead>
                   <tr>
                     <Th>Conta</Th>
-                    <Th align="right">Valor</Th>
+                    <Th align="right">Valor Atual</Th>
+                    <Th align="right">Valor na Data</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {renderTree(dados.ativo)}
+                  {renderTree(ativo, 0, showValorNaData)}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#f3f6fa', fontWeight: 700 }}>
                     <Td align="right">Total do Ativo</Td>
-                    <Td align="right">{Number(dados.ativo.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
+                    <Td align="right">{moeda(totalAtivoAtual)}</Td>
+                    <Td align="right">{showValorNaData ? moeda(totalAtivoNaData) : '-'}</Td>
                   </tr>
                 </tfoot>
               </Table>
             </Col>
-            {/* PASSIVO + PL */}
+
             <Col>
               <h3 style={{ color: '#2563eb', textAlign: 'center', fontWeight: 700 }}>PASSIVO + PATRIMÔNIO LÍQUIDO</h3>
               <Table>
                 <thead>
                   <tr>
                     <Th>Conta</Th>
-                    <Th align="right">Valor</Th>
+                    <Th align="right">Valor Atual</Th>
+                    <Th align="right">Valor na Data</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {renderTree(dados.passivoPL)}
-                  {renderTree(dados.patrimonioLiquido)}
+                  {renderTree(passivoPL, 0, showValorNaData)}
+                  {renderTree(patrimonioLiquido, 0, showValorNaData)}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#f3f6fa', fontWeight: 700 }}>
                     <Td align="right">Total Passivo + PL</Td>
-                    <Td align="right">{(Number(dados.passivoPL.valor) + Number(dados.patrimonioLiquido.valor)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
+                    <Td align="right">{moeda(totalPassivoPLAtual)}</Td>
+                    <Td align="right">{showValorNaData ? moeda(totalPassivoPLNaData) : '-'}</Td>
                   </tr>
                 </tfoot>
               </Table>
             </Col>
           </Row>
         )}
-      </Card>
-    </Container>
+      </div>
+    </div>
   );
 }

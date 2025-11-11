@@ -6,7 +6,13 @@ export const getBalancete = async (dataReferencia, userId) => {
 };
 
 export const getBalancoPatrimonial = async (userId, date, params) => {
-  if (date === undefined) {
+  if (date) {
+    const parsedDate = new Date(date);
+    const day = String(parsedDate.getDate()).padStart(2, '0');
+    const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+    const year = parsedDate.getFullYear();
+    date = `${day}-${month}-${year}`;
+  } else {
     const today = new Date();
     const day = String(today.getDate()).padStart(2, '0');
     const month = String(today.getMonth() + 1).padStart(2, '0');

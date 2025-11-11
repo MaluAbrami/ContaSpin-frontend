@@ -5,8 +5,15 @@ export const getBalancete = async (dataReferencia, userId) => {
   return data;
 };
 
-export const getBalancoPatrimonial = async (userId, params) => {
-  const { data } = await api.get(`/relatorios/gerar-balanco-patrimonial/${userId}`, { params });
+export const getBalancoPatrimonial = async (userId, date, params) => {
+  if (date === undefined) {
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    date = `${day}-${month}-${year}`;
+  }
+  const { data } = await api.get(`/relatorios/gerar-balanco-patrimonial/${userId}/${date}`, { params });
   return data;
 };
 

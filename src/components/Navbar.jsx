@@ -89,6 +89,9 @@ export default function Navbar() {
         <NavLink to="/balanco" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>
           Balanço Patrimonial
         </NavLink>
+        <NavLink to="/dre" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>
+          DRE
+        </NavLink>
       </div>
 
       {/* Botão de Logout no fim */}

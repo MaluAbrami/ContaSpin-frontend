@@ -6,9 +6,27 @@ export const getBalancete = async (dataReferencia, userId) => {
 };
 
 export const getBalancoPatrimonial = async (userId, params) => {
-  const { data } = await api.get(`/relatorios/gerar-balanco-patrimonial/${userId}`, { params });
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy = now.getFullYear();
+
+  const formatted = `${dd}-${mm}-${yyyy}`;
+  const { data } = await api.get(`/relatorios/gerar-balanco-patrimonial/${userId}/${formatted}`, { params });
   return data;
 };
+
+export const getDRE = async (userId, dataReferencia) => {
+  const now = new Date(dataReferencia);
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy = now.getFullYear();
+
+  const formatted = `${dd}-${mm}-${yyyy}`;
+  
+  const { data } = await api.get(`/relatorios/gerar-dre/${userId}/${formatted}`)
+  return data;
+}
 
 export const getLivroRazao = async (codigoConta, userId) => {
   const { data } = await api.get(`/relatorios/gerar-livro-razao/${codigoConta}/${userId}`);

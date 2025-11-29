@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import html2pdf from 'html2pdf.js';
 import styled from 'styled-components';
-import { getBalancoPatrimonial } from '../services/relatorios';
+import { getBalancoPatrimonialByDate } from '../services/relatorios';
 import { useUser } from '../contexts/UserContext';
 
+/* --- Styled (mantive os seus) --- */
 const Container = styled.div`
   min-height: 70vh;
   display: flex;
@@ -11,6 +12,7 @@ const Container = styled.div`
   justify-content: center;
   align-items: center;
   width: 100%;
+  padding: 16px;
 `;
 const Card = styled.div`
   width: 100%;
@@ -31,12 +33,13 @@ const Th = styled.th`
   border: 1px solid #eee;
   background: #2563eb;
   color: #fff;
+  text-align: ${(p) => p.align || 'left'};
 `;
 const Td = styled.td`
   padding: 8px;
   border: 1px solid #eee;
   color: #2563eb;
-  text-align: ${props => props.align || 'left'};
+  text-align: ${(p) => p.align || 'left'};
 `;
 const Col = styled.div`
   flex: 1;
@@ -46,22 +49,94 @@ const Row = styled.div`
   display: flex;
   gap: 32px;
 `;
+const Filters = styled.div`
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 8px;
+`;
+const Button = styled.button`
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-weight: 600;
+  cursor: pointer;
+`;
+/* -------------------------------- */
 
-function renderTree(node, nivel = 0) {
-  if (!node) return null;
-  return (
-    <>
-      <tr>
-        <Td style={{ paddingLeft: 16 + nivel * 24, fontWeight: nivel === 0 ? 700 : 400 }}>
-          {node.codigo ? `${node.codigo} - ` : ''}{node.nome}
-        </Td>
-        <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>
-          {Number(node.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-        </Td>
-      </tr>
-      {node.filhos && node.filhos.map((f, i) => renderTree(f, nivel + 1))}
-    </>
-  );
+const fmt = (v) =>
+  typeof v === 'number'
+    ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    : v;
+
+/* tenta extrair valores do nó (vários nomes possíveis) */
+const extractValue = (node) => {
+  if (!node) return 0;
+  // backend pode retornar estrutura com campos: valor, Valor, valorAtual, valorInicial, valorAtual.valor etc.
+  const vCandidates = [
+    node.valorAtual, node.ValorAtual, node.valor_atual, node.valorAtual?.atual,
+    node.valor, node.Valor, node.valorTotal, node.total,
+    node.valorInicial?.atual, node.atual
+  ];
+  for (const c of vCandidates) {
+    if (typeof c === 'number') return c;
+    if (typeof c === 'string' && !isNaN(Number(c))) return Number(c);
+    if (c && typeof c === 'object' && (typeof c.atual === 'number' || typeof c.atual === 'string')) {
+      return Number(c.atual);
+    }
+  }
+  return 0;
+};
+
+/* renderiza recursivamente comparando dois nós
+   nodeA: nó retornado para dateA (Atual)
+   nodeB: nó retornado para dateB (Inicial)
+   nivel: recuo visual */
+function renderTreeCompare(nodeA, nodeB, nivel = 0) {
+  // se ambos vazios, nada pra renderizar
+  if (!nodeA && !nodeB) return null;
+
+  // preferir label/codigo de nodeA, senão nodeB
+  const nome = nodeA?.nome ?? nodeB?.nome ?? nodeA?.Nome ?? nodeB?.Nome ?? '—';
+  const codigo = nodeA?.codigo ?? nodeB?.codigo ?? nodeA?.Codigo ?? nodeB?.Codigo;
+
+  // extrai valores
+  const valA = extractValue(nodeA);
+  const valB = extractValue(nodeB);
+
+  // filhos: tentar casar por posição (se backend retorna arrays correspondentes)
+  const filhosA = nodeA?.filhos ?? nodeA?.children ?? nodeA?.nodes ?? [];
+  const filhosB = nodeB?.filhos ?? nodeB?.children ?? nodeB?.nodes ?? [];
+
+  // render current row
+  const rows = [
+    <tr key={`${codigo ?? nome}-root`} >
+      <Td style={{ paddingLeft: 16 + nivel * 24, fontWeight: nivel === 0 ? 700 : 400 }}>
+        {codigo ? `${codigo} - ` : ''}{nome}
+      </Td>
+      <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>
+        {fmt(valA)}
+      </Td>
+      <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>
+        {fmt(valB)}
+      </Td>
+    </tr>
+  ];
+
+  // if both have children, pair by index; otherwise render each child's comparison with null counterpart
+  const maxLen = Math.max(filhosA.length, filhosB.length);
+  for (let i = 0; i < maxLen; i++) {
+    const fa = filhosA[i] ?? null;
+    const fb = filhosB[i] ?? null;
+    rows.push(...(renderTreeCompare(fa, fb, nivel + 1) || []));
+  }
+
+  return rows;
 }
 
 function usePdfExportStyle() {
@@ -70,8 +145,8 @@ function usePdfExportStyle() {
       const style = document.createElement('style');
       style.id = 'pdf-export-style';
       style.textContent = `
-        .pdf-export { font-size: 12px !important; max-width: 900px !important; }
-        .pdf-export table { font-size: 12px !important; max-width: 900px !important; }
+        .pdf-export { font-size: 12px !important; max-width: 1000px !important; }
+        .pdf-export table { font-size: 12px !important; }
         .pdf-export th, .pdf-export td { padding: 4px 6px !important; }
       `;
       document.head.appendChild(style);
@@ -79,55 +154,106 @@ function usePdfExportStyle() {
   }, []);
 }
 
-export default function BalancoPatrimonial() {
+export default function BalancoComparativo() {
   const { userId } = useUser();
-  const [dados, setDados] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [dadosA, setDadosA] = useState(null); // resposta para dateA (Atual)
+  const [dadosB, setDadosB] = useState(null); // resposta para dateB (Inicial)
+  const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState(null);
+
   const pdfRef = useRef();
   usePdfExportStyle();
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        setErro(null);
-        const data = await getBalancoPatrimonial(userId);
-        setDados(data);
-      } catch (err) {
-        setErro(err?.message || 'Erro ao buscar balanço patrimonial');
-      } finally {
-        setLoading(false);
-      }
+  // defaults: hoje e início do mês anterior (exemplo)
+  const today = new Date();
+  const defaultA = today.toISOString().split('T')[0]; // hoje
+  const prevMonthStart = (() => {
+    const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    return d.toISOString().split('T')[0];
+  })();
+
+  const [dateA, setDateA] = useState(defaultA);
+  const [dateB, setDateB] = useState(prevMonthStart);
+
+  const fetchBoth = async (dA = dateA, dB = dateB) => {
+    // garante formato yyyy-MM-dd (inputs já retornam esse formato)
+    setLoading(true);
+    setErro(null);
+
+    try {
+      // faz duas requisições em paralelo
+      const [respA, respB] = await Promise.all([
+        getBalancoPatrimonialByDate(userId, dA),
+        getBalancoPatrimonialByDate(userId, dB)
+      ]);
+
+      setDadosA(respA);
+      setDadosB(respB);
+    } catch (err) {
+      console.error('Erro ao buscar comparativo:', err);
+      setErro(err?.message || 'Erro ao buscar balanço comparativo');
+      setDadosA(null);
+      setDadosB(null);
+    } finally {
+      setLoading(false);
     }
-    fetchData();
+  };
+
+  useEffect(() => {
+    // busca inicial
+    fetchBoth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   function exportarPDF() {
     if (!pdfRef.current) return;
-    // Aplica classe temporária para exportação
     const el = pdfRef.current;
     el.classList.add('pdf-export');
     html2pdf().set({
       margin: 0.2,
-      filename: `balanco-patrimonial.pdf`,
+      filename: `balanco_comparativo_${dateA}_vs_${dateB}.pdf`,
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
     }).from(el).save().then(() => {
       el.classList.remove('pdf-export');
+    }).catch(() => {
+      el.classList.remove('pdf-export');
     });
   }
 
+  /* helper para obter totals de um nó raiz */
+  const getTotals = (node) => {
+    if (!node) return { atual: 0, inicial: 0 };
+    const atual = extractValue(node);
+    // no caso de node vindo apenas com 'valor' e sem 'inicial', inicial fica 0
+    return { atual, inicial: 0 };
+  };
+
   return (
     <Container>
-      <h2 style={{ fontSize: 32, fontWeight: 800, color: '#2563eb' }}>Balanço Patrimonial</h2>
-      <p style={{ maxWidth: 500, margin: '1rem auto', fontSize: 20, color: '#2563eb' }}>Veja o balanço patrimonial da empresa.</p>
-      <button onClick={exportarPDF} style={{ alignSelf: 'flex-end', marginBottom: 8, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 18px', fontWeight: 600, cursor: 'pointer' }}>Exportar PDF</button>
-      <Card ref={pdfRef} id="balanco-pdf" style={{ minWidth: 900, maxWidth: '100%', overflowX: 'auto' }}>
+      <h2 style={{ fontSize: 32, fontWeight: 800, color: '#2563eb' }}>Balanço Patrimonial — Comparativo</h2>
+      <p style={{ maxWidth: 700, margin: '1rem auto', fontSize: 16, color: '#2563eb' }}>
+        Compare dois snapshots do balanço por data (Atual = {dateA} / Inicial = {dateB})
+      </p>
+
+      <Filters>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <label style={{ color: '#2563eb', fontWeight: 600 }}>Data A (Atual):</label>
+          <input type="date" value={dateA} onChange={(e) => setDateA(e.target.value)} />
+          <label style={{ color: '#2563eb', fontWeight: 600 }}>Data B (Inicial):</label>
+          <input type="date" value={dateB} onChange={(e) => setDateB(e.target.value)} />
+          <Button onClick={() => fetchBoth(dateA, dateB)}>Aplicar</Button>
+          <Button onClick={exportarPDF}>Exportar PDF</Button>
+        </div>
+      </Filters>
+
+      <Card ref={pdfRef} id="balanco-comparativo" style={{ minWidth: 900, maxWidth: '100%', overflowX: 'auto' }}>
         {erro && <div style={{ color: 'red', marginBottom: 8 }}>{erro}</div>}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 24 }}>Carregando...</div>
-        ) : dados && (
+          <div style={{ textAlign: 'center', padding: 24 }}>Carregando comparativo...</div>
+        ) : (!dadosA && !dadosB) ? (
+          <div style={{ padding: 12 }}>Nenhum dado disponível para as datas selecionadas.</div>
+        ) : (
           <Row>
             {/* ATIVO */}
             <Col>
@@ -136,20 +262,38 @@ export default function BalancoPatrimonial() {
                 <thead>
                   <tr>
                     <Th>Conta</Th>
-                    <Th align="right">Valor</Th>
+                    <Th align="right">Atual ({dateA})</Th>
+                    <Th align="right">Inicial ({dateB})</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {renderTree(dados.ativo)}
+                  {/* suporta node raiz ou array */}
+                  {Array.isArray(dadosA?.ativo) || Array.isArray(dadosB?.ativo) ? (
+                    // se for array, renderiza por índice (tenta casar por posição)
+                    (() => {
+                      const arrA = Array.isArray(dadosA?.ativo) ? dadosA.ativo : [];
+                      const arrB = Array.isArray(dadosB?.ativo) ? dadosB.ativo : [];
+                      const max = Math.max(arrA.length, arrB.length);
+                      const rows = [];
+                      for (let i = 0; i < max; i++) {
+                        rows.push(...(renderTreeCompare(arrA[i] ?? null, arrB[i] ?? null) || []));
+                      }
+                      return rows;
+                    })()
+                  ) : (
+                    renderTreeCompare(dadosA?.ativo ?? null, dadosB?.ativo ?? null)
+                  )}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#f3f6fa', fontWeight: 700 }}>
                     <Td align="right">Total do Ativo</Td>
-                    <Td align="right">{Number(dados.ativo.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
+                    <Td align="right">{fmt(getTotals(dadosA?.ativo).atual)}</Td>
+                    <Td align="right">{fmt(getTotals(dadosB?.ativo).atual)}</Td>
                   </tr>
                 </tfoot>
               </Table>
             </Col>
+
             {/* PASSIVO + PL */}
             <Col>
               <h3 style={{ color: '#2563eb', textAlign: 'center', fontWeight: 700 }}>PASSIVO + PATRIMÔNIO LÍQUIDO</h3>
@@ -157,17 +301,57 @@ export default function BalancoPatrimonial() {
                 <thead>
                   <tr>
                     <Th>Conta</Th>
-                    <Th align="right">Valor</Th>
+                    <Th align="right">Atual ({dateA})</Th>
+                    <Th align="right">Inicial ({dateB})</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {renderTree(dados.passivoPL)}
-                  {renderTree(dados.patrimonioLiquido)}
+                  {/* Passivo */}
+                  {Array.isArray(dadosA?.passivoPL) || Array.isArray(dadosB?.passivoPL) ? (
+                    (() => {
+                      const arrA = Array.isArray(dadosA?.passivoPL) ? dadosA.passivoPL : [];
+                      const arrB = Array.isArray(dadosB?.passivoPL) ? dadosB.passivoPL : [];
+                      const max = Math.max(arrA.length, arrB.length);
+                      const rows = [];
+                      for (let i = 0; i < max; i++) {
+                        rows.push(...(renderTreeCompare(arrA[i] ?? null, arrB[i] ?? null) || []));
+                      }
+                      return rows;
+                    })()
+                  ) : (
+                    renderTreeCompare(dadosA?.passivoPL ?? null, dadosB?.passivoPL ?? null)
+                  )}
+
+                  {/* Patrimônio Líquido */}
+                  {Array.isArray(dadosA?.patrimonioLiquido) || Array.isArray(dadosB?.patrimonioLiquido) ? (
+                    (() => {
+                      const arrA = Array.isArray(dadosA?.patrimonioLiquido) ? dadosA.patrimonioLiquido : [];
+                      const arrB = Array.isArray(dadosB?.patrimonioLiquido) ? dadosB.patrimonioLiquido : [];
+                      const max = Math.max(arrA.length, arrB.length);
+                      const rows = [];
+                      for (let i = 0; i < max; i++) {
+                        rows.push(...(renderTreeCompare(arrA[i] ?? null, arrB[i] ?? null) || []));
+                      }
+                      return rows;
+                    })()
+                  ) : (
+                    renderTreeCompare(dadosA?.patrimonioLiquido ?? null, dadosB?.patrimonioLiquido ?? null)
+                  )}
+
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#f3f6fa', fontWeight: 700 }}>
                     <Td align="right">Total Passivo + PL</Td>
-                    <Td align="right">{(Number(dados.passivoPL.valor) + Number(dados.patrimonioLiquido.valor)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Td>
+                    <Td align="right">
+                      {fmt(
+                        (extractValue(dadosA?.passivoPL) || 0) + (extractValue(dadosA?.patrimonioLiquido) || 0)
+                      )}
+                    </Td>
+                    <Td align="right">
+                      {fmt(
+                        (extractValue(dadosB?.passivoPL) || 0) + (extractValue(dadosB?.patrimonioLiquido) || 0)
+                      )}
+                    </Td>
                   </tr>
                 </tfoot>
               </Table>

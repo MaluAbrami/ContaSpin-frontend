@@ -80,8 +80,9 @@ const extractValue = (node) => {
   // backend pode retornar estrutura com campos: valor, Valor, valorAtual, valorInicial, valorAtual.valor etc.
   const vCandidates = [
     node.valorAtual, node.ValorAtual, node.valor_atual, node.valorAtual?.atual,
+    node.valorInicial, node.ValorInicial, node.valor_inicial, node.valorInicial?.atual,
     node.valor, node.Valor, node.valorTotal, node.total,
-    node.valorInicial?.atual, node.atual
+    node.inicial, node.Inicial, node.atual, node.Atual
   ];
   for (const c of vCandidates) {
     if (typeof c === 'number') return c;
@@ -109,7 +110,7 @@ function renderTreeCompare(nodeA, nodeB, nivel = 0) {
   const valA = extractValue(nodeA);
   const valB = extractValue(nodeB);
 
-  // filhos: tentar casar por posição (se backend retorna arrays correspondentes)
+  // filhos: tentar casar por código/nome primeiro, senão por posição
   const filhosA = nodeA?.filhos ?? nodeA?.children ?? nodeA?.nodes ?? [];
   const filhosB = nodeB?.filhos ?? nodeB?.children ?? nodeB?.nodes ?? [];
 
@@ -128,12 +129,35 @@ function renderTreeCompare(nodeA, nodeB, nivel = 0) {
     </tr>
   ];
 
-  // if both have children, pair by index; otherwise render each child's comparison with null counterpart
-  const maxLen = Math.max(filhosA.length, filhosB.length);
-  for (let i = 0; i < maxLen; i++) {
-    const fa = filhosA[i] ?? null;
-    const fb = filhosB[i] ?? null;
+  // cria mapa de filhosB por chave (codigo ou nome) para casar com filhosA
+  const mapB = new Map();
+  for (const fb of filhosB) {
+    const key = fb?.codigo ?? fb?.Codigo ?? fb?.nome ?? fb?.Nome ?? null;
+    if (key != null) mapB.set(String(key), fb);
+  }
+
+  const usedB = new Set();
+
+  // primeiro, percorre filhosA e tenta casar com mapB
+  for (let i = 0; i < filhosA.length; i++) {
+    const fa = filhosA[i];
+    let fb = null;
+    const keyA = fa?.codigo ?? fa?.Codigo ?? fa?.nome ?? fa?.Nome ?? null;
+    if (keyA != null && mapB.has(String(keyA))) {
+      fb = mapB.get(String(keyA));
+      usedB.add(fb);
+    } else {
+      // fallback por posição
+      fb = filhosB[i] ?? null;
+      if (fb) usedB.add(fb);
+    }
     rows.push(...(renderTreeCompare(fa, fb, nivel + 1) || []));
+  }
+
+  // depois, renderiza filhosB que não foram usados
+  for (const fb of filhosB) {
+    if (usedB.has(fb)) continue;
+    rows.push(...(renderTreeCompare(null, fb, nivel + 1) || []));
   }
 
   return rows;
@@ -187,8 +211,11 @@ export default function BalancoComparativo() {
         getBalancoPatrimonialByDate(userId, dB)
       ]);
 
-      setDadosA(respA);
-      setDadosB(respB);
+        console.debug('Balanco respA:', respA);
+        console.debug('Balanco respB:', respB);
+
+        setDadosA(respA);
+        setDadosB(respB);
     } catch (err) {
       console.error('Erro ao buscar comparativo:', err);
       setErro(err?.message || 'Erro ao buscar balanço comparativo');
@@ -200,10 +227,10 @@ export default function BalancoComparativo() {
   };
 
   useEffect(() => {
-    // busca inicial
-    fetchBoth();
+    // busca sempre que o usuário ou as datas mudarem
+    fetchBoth(dateA, dateB);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, dateA, dateB]);
 
   function exportarPDF() {
     if (!pdfRef.current) return;
@@ -224,9 +251,67 @@ export default function BalancoComparativo() {
   /* helper para obter totals de um nó raiz */
   const getTotals = (node) => {
     if (!node) return { atual: 0, inicial: 0 };
+
+    // se node for array, soma recursivamente
+    if (Array.isArray(node)) {
+      let sumAtual = 0;
+      let sumInicial = 0;
+      for (const n of node) {
+        const t = getTotals(n);
+        sumAtual += Number(t.atual || 0);
+        sumInicial += Number(t.inicial || 0);
+      }
+      return { atual: sumAtual, inicial: sumInicial };
+    }
+
     const atual = extractValue(node);
-    // no caso de node vindo apenas com 'valor' e sem 'inicial', inicial fica 0
-    return { atual, inicial: 0 };
+    // tenta extrair o valor inicial (quando o backend fornece)
+    const extractInitial = (n) => {
+      if (!n) return 0;
+      const cand = [
+        n.valorInicial, n.ValorInicial, n.valor_inicial, n.inicial, n.Inicial,
+        n.valor?.inicial, n.valor?.Inicial, n.valor?.valorInicial,
+        // às vezes o inicial vem em um objeto separado
+        n.inicialValor, n.inicial?.valor
+      ];
+      for (const c of cand) {
+        if (typeof c === 'number') return c;
+        if (typeof c === 'string' && !isNaN(Number(c))) return Number(c);
+        if (c && typeof c === 'object' && (typeof c.inicial === 'number' || typeof c.inicial === 'string')) {
+          return Number(c.inicial);
+        }
+        if (c && typeof c === 'object' && (typeof c.valor === 'number' || typeof c.valor === 'string')) {
+          return Number(c.valor);
+        }
+      }
+      return 0;
+    };
+
+    const inicial = extractInitial(node);
+    return { atual, inicial };
+  };
+
+  // logs de totals (ajuda debug quando a UI parece não atualizar)
+  useEffect(() => {
+    try {
+      const tA = getTotals(dadosA?.ativo);
+      const tB = getTotals(dadosB?.ativo);
+      console.debug('Totals ATIVO A', tA, 'ATIVO B', tB);
+    } catch (e) {
+      console.debug('Erro ao calcular totals debug', e);
+    }
+  }, [dadosA, dadosB]);
+
+  // calcular totais uma vez para usar na renderização (evita chamadas repetidas e garante fallback correto)
+  const totalsAtivoA = getTotals(dadosA?.ativo);
+  const totalsAtivoB = getTotals(dadosB?.ativo);
+  const totalsPassivoA = {
+    passivo: getTotals(dadosA?.passivoPL).atual || 0,
+    pl: getTotals(dadosA?.patrimonioLiquido).atual || 0,
+  };
+  const totalsPassivoB = {
+    passivo: getTotals(dadosB?.passivoPL).inicial || getTotals(dadosB?.passivoPL).atual || 0,
+    pl: getTotals(dadosB?.patrimonioLiquido).inicial || getTotals(dadosB?.patrimonioLiquido).atual || 0,
   };
 
   return (
@@ -287,8 +372,8 @@ export default function BalancoComparativo() {
                 <tfoot>
                   <tr style={{ background: '#f3f6fa', fontWeight: 700 }}>
                     <Td align="right">Total do Ativo</Td>
-                    <Td align="right">{fmt(getTotals(dadosA?.ativo).atual)}</Td>
-                    <Td align="right">{fmt(getTotals(dadosB?.ativo).atual)}</Td>
+                    <Td align="right">{fmt(totalsAtivoA.atual)}</Td>
+                    <Td align="right">{fmt(totalsAtivoB.inicial || totalsAtivoB.atual)}</Td>
                   </tr>
                 </tfoot>
               </Table>
@@ -342,16 +427,8 @@ export default function BalancoComparativo() {
                 <tfoot>
                   <tr style={{ background: '#f3f6fa', fontWeight: 700 }}>
                     <Td align="right">Total Passivo + PL</Td>
-                    <Td align="right">
-                      {fmt(
-                        (extractValue(dadosA?.passivoPL) || 0) + (extractValue(dadosA?.patrimonioLiquido) || 0)
-                      )}
-                    </Td>
-                    <Td align="right">
-                      {fmt(
-                        (extractValue(dadosB?.passivoPL) || 0) + (extractValue(dadosB?.patrimonioLiquido) || 0)
-                      )}
-                    </Td>
+                    <Td align="right">{fmt((totalsPassivoA.passivo || 0) + (totalsPassivoA.pl || 0))}</Td>
+                    <Td align="right">{fmt((totalsPassivoB.passivo || 0) + (totalsPassivoB.pl || 0))}</Td>
                   </tr>
                 </tfoot>
               </Table>

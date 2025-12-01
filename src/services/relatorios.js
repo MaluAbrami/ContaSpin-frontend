@@ -6,9 +6,12 @@ export const getBalancete = async (dataReferencia, userId) => {
 };
 
 export const getBalancoPatrimonialByDate = async (empresaId, date) => {
-  const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+  const [yyyy, mm, dd] = date.split('-'); // não usa Date
 
-  const url = `/relatorios/gerar-balanco-patrimonial/${encodeURIComponent(empresaId)}/${encodeURIComponent(dateStr)}`;
+  const formatted = `${dd}-${mm}-${yyyy}`;
+
+  const url = `/relatorios/gerar-balanco-patrimonial/${encodeURIComponent(empresaId)}/${encodeURIComponent(formatted)}`;
+  console.debug('GET', url);
   const { data } = await api.get(url);
   return data;
 };

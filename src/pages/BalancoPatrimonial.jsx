@@ -74,6 +74,8 @@ const fmt = (v) =>
     ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
     : v;
 
+/* (removida) anteriormente havia formatação legível das datas — agora mostramos apenas o input */
+
 /* tenta extrair valores do nó (vários nomes possíveis) */
 const extractValue = (node) => {
   if (!node) return 0;
@@ -316,19 +318,28 @@ export default function BalancoComparativo() {
 
   return (
     <Container>
-      <h2 style={{ fontSize: 32, fontWeight: 800, color: '#2563eb' }}>Balanço Patrimonial — Comparativo</h2>
-      <p style={{ maxWidth: 700, margin: '1rem auto', fontSize: 16, color: '#2563eb' }}>
-        Compare dois snapshots do balanço por data (Atual = {dateA} / Inicial = {dateB})
-      </p>
+      <h2 style={{ fontSize: 32, fontWeight: 800, color: '#2563eb' }}>Balanço Patrimonial</h2>
 
       <Filters>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <label style={{ color: '#2563eb', fontWeight: 600 }}>Data A (Atual):</label>
-          <input type="date" value={dateA} onChange={(e) => setDateA(e.target.value)} />
-          <label style={{ color: '#2563eb', fontWeight: 600 }}>Data B (Inicial):</label>
-          <input type="date" value={dateB} onChange={(e) => setDateB(e.target.value)} />
-          <Button onClick={() => fetchBoth(dateA, dateB)}>Aplicar</Button>
-          <Button onClick={exportarPDF}>Exportar PDF</Button>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', width: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ color: '#2563eb', fontWeight: 700 }}>Data atual</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="date" value={dateA} onChange={(e) => setDateA(e.target.value)} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ color: '#2563eb', fontWeight: 700 }}>Data comparativa</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="date" value={dateB} onChange={(e) => setDateB(e.target.value)} />
+            </div>
+          </div>
+
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <Button onClick={() => fetchBoth(dateA, dateB)}>Aplicar</Button>
+            <Button onClick={exportarPDF}>Exportar PDF</Button>
+          </div>
         </div>
       </Filters>
 
@@ -347,8 +358,8 @@ export default function BalancoComparativo() {
                 <thead>
                   <tr>
                     <Th>Conta</Th>
-                    <Th align="right">Atual ({dateA})</Th>
-                    <Th align="right">Inicial ({dateB})</Th>
+                    <Th align="right">Atual</Th>
+                    <Th align="right">Comparativa</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -386,8 +397,8 @@ export default function BalancoComparativo() {
                 <thead>
                   <tr>
                     <Th>Conta</Th>
-                    <Th align="right">Atual ({dateA})</Th>
-                    <Th align="right">Inicial ({dateB})</Th>
+                    <Th align="right">Atual</Th>
+                    <Th align="right">Comparativa</Th>
                   </tr>
                 </thead>
                 <tbody>

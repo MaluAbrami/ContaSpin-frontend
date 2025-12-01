@@ -15,14 +15,11 @@ export const getBalancoPatrimonialByDate = async (empresaId, date) => {
 
 
 export const getDRE = async (userId, dataReferencia) => {
-  const now = new Date(dataReferencia);
-  const dd = String(now.getDate()).padStart(2, '0');
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const yyyy = now.getFullYear();
+  const [yyyy, mm, dd] = dataReferencia.split('-'); // não usa Date
 
   const formatted = `${dd}-${mm}-${yyyy}`;
-  
-  const { data } = await api.get(`/relatorios/gerar-dre/${userId}/${formatted}`)
+
+  const { data } = await api.get(`/relatorios/gerar-dre/${userId}/${formatted}`);
   return data;
 }
 

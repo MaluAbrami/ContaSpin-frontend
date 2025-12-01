@@ -100,7 +100,7 @@ const extractValue = (node) => {
    nodeA: nó retornado para dateA (Atual)
    nodeB: nó retornado para dateB (Inicial)
    nivel: recuo visual */
-function renderTreeCompare(nodeA, nodeB, nivel = 0) {
+function renderTreeCompare(nodeA, nodeB, nivel = 0, totalA = 0, totalB = 0, showAnalysis = true) {
   // se ambos vazios, nada pra renderizar
   if (!nodeA && !nodeB) return null;
 
@@ -112,24 +112,47 @@ function renderTreeCompare(nodeA, nodeB, nivel = 0) {
   const valA = extractValue(nodeA);
   const valB = extractValue(nodeB);
 
+  // horizontal
+  const diff = Number((valA || 0) - (valB || 0));
+  const diffPct = valB ? diff / valB : null; // AH%
+
+  // vertical
+  const vpercA = totalA ? (valA || 0) / totalA : null;
+  const vpercB = totalB ? (valB || 0) / totalB : null;
+
   // filhos: tentar casar por código/nome primeiro, senão por posição
   const filhosA = nodeA?.filhos ?? nodeA?.children ?? nodeA?.nodes ?? [];
   const filhosB = nodeB?.filhos ?? nodeB?.children ?? nodeB?.nodes ?? [];
 
-  // render current row
-  const rows = [
-    <tr key={`${codigo ?? nome}-root`} >
-      <Td style={{ paddingLeft: 16 + nivel * 24, fontWeight: nivel === 0 ? 700 : 400 }}>
-        {codigo ? `${codigo} - ` : ''}{nome}
-      </Td>
-      <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>
-        {fmt(valA)}
-      </Td>
-      <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>
-        {fmt(valB)}
-      </Td>
-    </tr>
-  ];
+  // helper format pct
+  const formatPct = (p) => (p == null ? '—' : `${(p * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`);
+
+  // render current row (two layouts: with or without analysis)
+  let rows;
+  if (showAnalysis) {
+    rows = [
+      <tr key={`${codigo ?? nome}-root`} >
+        <Td style={{ paddingLeft: 16 + nivel * 24, fontWeight: nivel === 0 ? 700 : 400 }}>
+          {codigo ? `${codigo} - ` : ''}{nome}
+        </Td>
+        <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>{fmt(valA)}</Td>
+        <Td align="right">{formatPct(vpercA)}</Td>
+        <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>{fmt(valB)}</Td>
+        <Td align="right">{formatPct(vpercB)}</Td>
+        <Td align="right">{diffPct == null ? '—' : `${(diffPct * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`}</Td>
+      </tr>
+    ];
+  } else {
+    rows = [
+      <tr key={`${codigo ?? nome}-root`}>
+        <Td style={{ paddingLeft: 16 + nivel * 24, fontWeight: nivel === 0 ? 700 : 400 }}>
+          {codigo ? `${codigo} - ` : ''}{nome}
+        </Td>
+        <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>{fmt(valA)}</Td>
+        <Td align="right" style={{ fontWeight: nivel === 0 ? 700 : 400 }}>{fmt(valB)}</Td>
+      </tr>
+    ];
+  }
 
   // cria mapa de filhosB por chave (codigo ou nome) para casar com filhosA
   const mapB = new Map();
@@ -153,13 +176,13 @@ function renderTreeCompare(nodeA, nodeB, nivel = 0) {
       fb = filhosB[i] ?? null;
       if (fb) usedB.add(fb);
     }
-    rows.push(...(renderTreeCompare(fa, fb, nivel + 1) || []));
+    rows.push(...(renderTreeCompare(fa, fb, nivel + 1, totalA, totalB, showAnalysis) || []));
   }
 
   // depois, renderiza filhosB que não foram usados
   for (const fb of filhosB) {
     if (usedB.has(fb)) continue;
-    rows.push(...(renderTreeCompare(null, fb, nivel + 1) || []));
+    rows.push(...(renderTreeCompare(null, fb, nivel + 1, totalA, totalB, showAnalysis) || []));
   }
 
   return rows;
@@ -182,6 +205,7 @@ function usePdfExportStyle() {
 
 export default function BalancoComparativo() {
   const { userId } = useUser();
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const [dadosA, setDadosA] = useState(null); // resposta para dateA (Atual)
   const [dadosB, setDadosB] = useState(null); // resposta para dateB (Inicial)
   const [loading, setLoading] = useState(false);
@@ -233,6 +257,32 @@ export default function BalancoComparativo() {
     fetchBoth(dateA, dateB);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, dateA, dateB]);
+
+  // garante que, ao montar, removemos a classe (evita deixar a sidebar oculta permanentemente)
+  useEffect(() => {
+    try {
+      if (typeof document !== 'undefined') document.body.classList.remove('hide-sidebar');
+    } catch (e) {}
+  }, []);
+
+  // quando showAnalysis muda, alterna a classe no body para esconder/exibir o menu lateral
+  useEffect(() => {
+    try {
+      if (typeof document !== 'undefined') {
+        if (showAnalysis) {
+          document.body.classList.add('hide-sidebar');
+        } else {
+          document.body.classList.remove('hide-sidebar');
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    // cleanup ao desmontar: garante que a classe seja removida
+    return () => {
+      try { if (typeof document !== 'undefined') document.body.classList.remove('hide-sidebar'); } catch (e) {}
+    };
+  }, [showAnalysis]);
 
   function exportarPDF() {
     if (!pdfRef.current) return;
@@ -336,7 +386,11 @@ export default function BalancoComparativo() {
             </div>
           </div>
 
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#374151' }}>
+              <input type="checkbox" checked={showAnalysis} onChange={(e) => setShowAnalysis(e.target.checked)} />
+              <span style={{ fontSize: 13 }}>Mostrar análise (V% / AH%)</span>
+            </label>
             <Button onClick={() => fetchBoth(dateA, dateB)}>Aplicar</Button>
             <Button onClick={exportarPDF}>Exportar PDF</Button>
           </div>
@@ -358,8 +412,11 @@ export default function BalancoComparativo() {
                 <thead>
                   <tr>
                     <Th>Conta</Th>
-                    <Th align="right">Atual</Th>
-                    <Th align="right">Comparativa</Th>
+                    <Th align="right">{dateA}</Th>
+                    {showAnalysis && <Th align="right">V%</Th>}
+                    <Th align="right">{dateB}</Th>
+                    {showAnalysis && <Th align="right">V%</Th>}
+                    {showAnalysis && <Th align="right">AH%</Th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -372,19 +429,22 @@ export default function BalancoComparativo() {
                       const max = Math.max(arrA.length, arrB.length);
                       const rows = [];
                       for (let i = 0; i < max; i++) {
-                        rows.push(...(renderTreeCompare(arrA[i] ?? null, arrB[i] ?? null) || []));
+                        rows.push(...(renderTreeCompare(arrA[i] ?? null, arrB[i] ?? null, 0, totalsAtivoA.atual, totalsAtivoB.atual, showAnalysis) || []));
                       }
                       return rows;
                     })()
                   ) : (
-                    renderTreeCompare(dadosA?.ativo ?? null, dadosB?.ativo ?? null)
+                    renderTreeCompare(dadosA?.ativo ?? null, dadosB?.ativo ?? null, 0, totalsAtivoA.atual, totalsAtivoB.atual, showAnalysis)
                   )}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#f3f6fa', fontWeight: 700 }}>
                     <Td align="right">Total do Ativo</Td>
                     <Td align="right">{fmt(totalsAtivoA.atual)}</Td>
-                    <Td align="right">{fmt(totalsAtivoB.inicial || totalsAtivoB.atual)}</Td>
+                    {showAnalysis && <Td align="right">100%</Td>}
+                    <Td align="right">{fmt(totalsAtivoB.atual)}</Td>
+                    {showAnalysis && <Td align="right">100%</Td>}
+                    {showAnalysis && <Td align="right">{totalsAtivoB.atual ? `${(((totalsAtivoA.atual - totalsAtivoB.atual)/totalsAtivoB.atual)*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}%` : '—'}</Td>}
                   </tr>
                 </tfoot>
               </Table>
@@ -397,8 +457,11 @@ export default function BalancoComparativo() {
                 <thead>
                   <tr>
                     <Th>Conta</Th>
-                    <Th align="right">Atual</Th>
-                    <Th align="right">Comparativa</Th>
+                    <Th align="right">{dateA}</Th>
+                    {showAnalysis && <Th align="right">V%</Th>}
+                    <Th align="right">{dateB}</Th>
+                    {showAnalysis && <Th align="right">V%</Th>}
+                    {showAnalysis && <Th align="right">AH%</Th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -409,13 +472,15 @@ export default function BalancoComparativo() {
                       const arrB = Array.isArray(dadosB?.passivoPL) ? dadosB.passivoPL : [];
                       const max = Math.max(arrA.length, arrB.length);
                       const rows = [];
+                      const totalA = (totalsPassivoA.passivo || 0) + (totalsPassivoA.pl || 0);
+                      const totalB = (totalsPassivoB.passivo || 0) + (totalsPassivoB.pl || 0);
                       for (let i = 0; i < max; i++) {
-                        rows.push(...(renderTreeCompare(arrA[i] ?? null, arrB[i] ?? null) || []));
+                        rows.push(...(renderTreeCompare(arrA[i] ?? null, arrB[i] ?? null, 0, totalA, totalB, showAnalysis) || []));
                       }
                       return rows;
                     })()
                   ) : (
-                    renderTreeCompare(dadosA?.passivoPL ?? null, dadosB?.passivoPL ?? null)
+                    renderTreeCompare(dadosA?.passivoPL ?? null, dadosB?.passivoPL ?? null, 0, (totalsPassivoA.passivo || 0) + (totalsPassivoA.pl || 0), (totalsPassivoB.passivo || 0) + (totalsPassivoB.pl || 0), showAnalysis)
                   )}
 
                   {/* Patrimônio Líquido */}
@@ -425,13 +490,15 @@ export default function BalancoComparativo() {
                       const arrB = Array.isArray(dadosB?.patrimonioLiquido) ? dadosB.patrimonioLiquido : [];
                       const max = Math.max(arrA.length, arrB.length);
                       const rows = [];
+                      const totalA = (totalsPassivoA.passivo || 0) + (totalsPassivoA.pl || 0);
+                      const totalB = (totalsPassivoB.passivo || 0) + (totalsPassivoB.pl || 0);
                       for (let i = 0; i < max; i++) {
-                        rows.push(...(renderTreeCompare(arrA[i] ?? null, arrB[i] ?? null) || []));
+                        rows.push(...(renderTreeCompare(arrA[i] ?? null, arrB[i] ?? null, 0, totalA, totalB, showAnalysis) || []));
                       }
                       return rows;
                     })()
                   ) : (
-                    renderTreeCompare(dadosA?.patrimonioLiquido ?? null, dadosB?.patrimonioLiquido ?? null)
+                    renderTreeCompare(dadosA?.patrimonioLiquido ?? null, dadosB?.patrimonioLiquido ?? null, 0, (totalsPassivoA.passivo || 0) + (totalsPassivoA.pl || 0), (totalsPassivoB.passivo || 0) + (totalsPassivoB.pl || 0), showAnalysis)
                   )}
 
                 </tbody>
@@ -439,7 +506,10 @@ export default function BalancoComparativo() {
                   <tr style={{ background: '#f3f6fa', fontWeight: 700 }}>
                     <Td align="right">Total Passivo + PL</Td>
                     <Td align="right">{fmt((totalsPassivoA.passivo || 0) + (totalsPassivoA.pl || 0))}</Td>
+                    {showAnalysis && <Td align="right">100%</Td>}
                     <Td align="right">{fmt((totalsPassivoB.passivo || 0) + (totalsPassivoB.pl || 0))}</Td>
+                    {showAnalysis && <Td align="right">100%</Td>}
+                    {showAnalysis && <Td align="right">{((totalsPassivoB.passivo || 0) + (totalsPassivoB.pl || 0)) ? `${((((totalsPassivoA.passivo || 0) + (totalsPassivoA.pl || 0)) - ((totalsPassivoB.passivo || 0) + (totalsPassivoB.pl || 0))) / ((totalsPassivoB.passivo || 0) + (totalsPassivoB.pl || 0)) * 100).toLocaleString('pt-BR',{maximumFractionDigits:2})}%` : '—'}</Td>}
                   </tr>
                 </tfoot>
               </Table>

@@ -64,6 +64,10 @@ export default function Navbar() {
   // Não renderiza a barra lateral se não houver usuário logado
   if (!userId) return null;
 
+  // A visibilidade agora é controlada por CSS via a classe `hide-sidebar` no body.
+  // Mantemos o componente sempre montado (quando `userId` existe) e aplicamos uma classe
+  // global para permitir que a sidebar seja escondida sem depender de re-render.
+
   const handleLogout = () => {
     try { localStorage.removeItem('userCompanyEmail'); } catch (e) {}
     setUserId(null);
@@ -71,7 +75,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav style={navContainer}>
+    <nav className="app-sidebar" style={navContainer}>
       {/* Container dos links fica no topo */}
       <div style={navLinksContainer}>
         <NavLink to="/" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle} end>

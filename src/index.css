@@ -33,6 +33,11 @@ body {
   min-height: 100vh;
 }
 
+/* quando a classe hide-sidebar estiver no body, ocultamos a sidebar imediatamente via CSS */
+body.hide-sidebar .app-sidebar {
+  display: none !important;
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;

@@ -13,7 +13,6 @@ const Container = styled.div`
   align-items: center;
   width: 100%;
   padding: 24px;
-  background: #f6f9ff;
 `;
 const Card = styled.div`
   width: 100%;

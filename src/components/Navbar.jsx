@@ -96,6 +96,9 @@ export default function Navbar() {
         <NavLink to="/dre" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>
           DRE
         </NavLink>
+        <NavLink to="/indicadores" style={({ isActive }) => isActive ? { ...linkStyle, ...activeStyle } : linkStyle}>
+          Indicadores
+        </NavLink>
       </div>
 
       {/* Botão de Logout no fim */}

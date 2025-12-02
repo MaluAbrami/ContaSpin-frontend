@@ -7,6 +7,7 @@ import LivroRazao from './pages/LivroRazao.jsx';
 import Balancete from './pages/Balancete.jsx';
 import BalancoPatrimonial from './pages/BalancoPatrimonial.jsx';
 import DRE from './pages/DRE.jsx';
+import Indicadores from './pages/Indicadores.jsx';
 import CriarEmpresa from './pages/CriarEmpresa.jsx';
 import { UserProvider, useUser } from './contexts/UserContext.jsx';
 
@@ -49,6 +50,7 @@ function AppContent() {
           <Route path="/balancete" element={<PrivateRoute element={<Balancete />} />} />
           <Route path="/balanco" element={<PrivateRoute element={<BalancoPatrimonial />} />} />
           <Route path="/dre" element={<PrivateRoute element={<DRE />} />} />
+          <Route path="/indicadores" element={<PrivateRoute element={<Indicadores />} />} />
 
           {/* Qualquer rota desconhecida volta para /home */}
           <Route path="*" element={<Navigate to="/home" replace />} />
